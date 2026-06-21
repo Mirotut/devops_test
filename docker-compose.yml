@@ -1,1 +1,22 @@
-version: "3.9"
+services:
+  worker:
+    build:
+      context: ./worker
+    ports:
+      - "5001:5001"
+    networks:
+      - app-network
+
+  app:
+    build:
+      context: ./app
+    ports:
+      - "5000:5000"
+    depends_on:
+      - worker
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

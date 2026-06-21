@@ -1,0 +1,26 @@
+name: Build App Docker Image
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build app Docker image
+        run: docker build -t app:latest ./app
+
+      - name: Save image as artifact
+        run: docker save app:latest -o app-image.tar
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-image
+          path: app-image.tar
