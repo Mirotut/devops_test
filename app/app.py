@@ -1,9 +1,9 @@
 from flask import Flask, jsonify
-import requests
+import redis
+import json
 
 app = Flask(__name__)
-
-WORKER_URL = "http://worker:5001/task"
+r = redis.Redis(host="redis", port=6379, decode_responses=True)
 
 
 @app.route("/health")
@@ -13,8 +13,9 @@ def health():
 
 @app.route("/task")
 def send_task():
-    response = requests.post(WORKER_URL, timeout=10)
-    return jsonify({"status": "task sent", "worker_response": response.json()})
+    task = {"task": "process", "data": "sample"}
+    r.rpush("tasks", json.dumps(task))
+    return jsonify({"status": "task queued via redis"})
 
 
 if __name__ == "__main__":

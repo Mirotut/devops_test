@@ -1,9 +1,16 @@
 services:
+  redis:
+    image: redis:7-alpine
+    networks:
+      - app-network
+
   worker:
     build:
       context: ./worker
-    ports:
-      - "5001:5001"
+    depends_on:
+      - redis
+    volumes:
+      - ./logs:/worker/logs
     networks:
       - app-network
 
@@ -14,6 +21,7 @@ services:
       - "5000:5000"
     depends_on:
       - worker
+      - redis
     networks:
       - app-network
 
