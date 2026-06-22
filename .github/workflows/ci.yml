@@ -1,15 +1,16 @@
-name: CI — Build app image
+name: CI — Build and Test
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:   # allows manual trigger from the GitHub Actions UI
 
 jobs:
+  # ── Job 1: build app image and save as artifact ──────────────────────────────
   build:
+    name: Build app image
     runs-on: ubuntu-latest
 
     steps:
@@ -27,3 +28,61 @@ jobs:
         with:
           name: app-image
           path: app-image.tar
+
+  # ── Job 2: spin up the full stack and run integration tests ──────────────────
+  test:
+    name: Integration test
+    runs-on: ubuntu-latest
+    needs: build   # only run if build succeeds
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Start full stack
+        run: docker compose up --build -d
+
+      - name: Wait for app to be healthy
+        # The app's depends_on chain (redis → worker → app) means that once
+        # the app health endpoint responds, all three services are ready.
+        run: |
+          echo "Waiting for app /health..."
+          timeout 90 bash -c \
+            'until curl -sf http://localhost:5000/health > /dev/null; do sleep 3; done'
+
+      - name: Test /health endpoint
+        run: curl -sf http://localhost:5000/health
+
+      - name: Test /task endpoint returns success JSON
+        run: |
+          response=$(curl -sf http://localhost:5000/task)
+          echo "Response: $response"
+          echo "$response" | grep -q "task queued"
+
+      - name: Verify worker logged the expected three lines
+        run: |
+          sleep 2
+          docker compose logs worker | grep "Worker received task"
+          docker compose logs worker | grep "Processing task\.\.\."
+          docker compose logs worker | grep "Task completed"
+
+      - name: Verify worker log file written on host (Bonus A)
+        run: |
+          grep "Worker received task"  logs/worker/worker.log
+          grep "Processing task\.\.\." logs/worker/worker.log
+          grep "Task completed"        logs/worker/worker.log
+
+      - name: Test clean shutdown — must finish in under 10 s
+        run: |
+          start=$(date +%s)
+          docker compose down
+          elapsed=$(( $(date +%s) - start ))
+          echo "Shutdown took ${elapsed}s"
+          [ "$elapsed" -lt 10 ]
+
+      - name: Upload worker log as artifact on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-log
+          path: logs/worker/worker.log
