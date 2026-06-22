@@ -1,12 +1,16 @@
+import json
 import os
 import signal
 import sys
-import requests
+
+import redis
 from flask import Flask, jsonify
 
 app = Flask(__name__)
 
-WORKER_URL = os.environ.get("WORKER_URL", "http://worker:5001/task")
+REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
+r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 
 def _handle_sigterm(*_):
@@ -23,8 +27,9 @@ def health():
 
 @app.route("/task", methods=["GET", "POST"])
 def send_task():
-    resp = requests.post(WORKER_URL)
-    return jsonify({"status": "task sent", "worker_response": resp.json()})
+    # Task delivery now goes through Redis — HTTP path to worker is removed.
+    r.lpush("tasks", json.dumps({"task": "process"}))
+    return jsonify({"status": "task queued"})
 
 
 if __name__ == "__main__":
