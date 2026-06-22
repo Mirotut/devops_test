@@ -1,20 +1,39 @@
-from flask import Flask
-import requests
+import json
+import os
+import signal
+import sys
+
+import redis
+from flask import Flask, jsonify
 
 app = Flask(__name__)
 
-WORKER_URL = "http://worker:5001/process"
+REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
+r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
-@app.route("/")
-def home():
-    return "App is running"
 
-@app.route("/task")
+def _handle_sigterm(*_):
+    sys.exit(0)
+
+
+signal.signal(signal.SIGTERM, _handle_sigterm)
+
+
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"})
+
+
+@app.route("/task", methods=["GET", "POST"])
 def send_task():
-    try:
-        r = requests.get(WORKER_URL)
-        return f"Worker response: {r.text}"
-    except Exception as e:
-        return f"Error contacting worker: {str(e)}"
+    # Task delivery now goes through Redis — HTTP path to worker is removed.
+    r.lpush("tasks", json.dumps({"task": "process"}))
+    return jsonify({"status": "task queued"})
 
-app.run(host="0.0.0.0", port=5000)
+
+if __name__ == "__main__":
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "5000"))
+    print("Application started", flush=True)
+    app.run(host=host, port=port)

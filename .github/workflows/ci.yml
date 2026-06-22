@@ -1,0 +1,29 @@
+name: CI — Build app image
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build app Docker image
+        run: docker build -t app-image:latest ./app
+
+      - name: Export image as tar
+        run: docker save app-image:latest -o app-image.tar
+
+      - name: Upload app-image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-image
+          path: app-image.tar
