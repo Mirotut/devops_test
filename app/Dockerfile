@@ -26,8 +26,10 @@ RUN addgroup --system appgroup && \
     adduser --system --ingroup appgroup --no-create-home appuser
 
 COPY --from=builder /opt/venv /opt/venv
-COPY app.py init.sh entrypoint.sh .
-RUN chmod +x entrypoint.sh init.sh
+COPY app.py entrypoint.sh startup.sh .
+RUN chmod +x entrypoint.sh startup.sh
+
+EXPOSE 5000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')" || exit 1

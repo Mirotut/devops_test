@@ -1,27 +1,30 @@
 services:
-  redis:
-    image: redis:7-alpine
-    networks:
-      - app-network
-
   worker:
     build:
       context: ./worker
-    depends_on:
-      - redis
-    volumes:
-      - ./logs:/worker/logs
+    # Worker is internal — no port published to host
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   app:
     build:
       context: ./app
     ports:
       - "5000:5000"
+    environment:
+      WORKER_URL: http://worker:5001/task
+    # Plain depends_on only orders startup, not readiness — the
+    # service_healthy condition is what actually guarantees the worker
+    # is accepting requests before the app container starts.
     depends_on:
-      - worker
-      - redis
+      worker:
+        condition: service_healthy
     networks:
       - app-network
 

@@ -1,9 +1,19 @@
+import os
+import signal
+import sys
+import requests
 from flask import Flask, jsonify
-import redis
-import json
 
 app = Flask(__name__)
-r = redis.Redis(host="redis", port=6379, decode_responses=True)
+
+WORKER_URL = os.environ.get("WORKER_URL", "http://worker:5001/task")
+
+
+def _handle_sigterm(*_):
+    sys.exit(0)
+
+
+signal.signal(signal.SIGTERM, _handle_sigterm)
 
 
 @app.route("/health")
@@ -11,12 +21,14 @@ def health():
     return jsonify({"status": "ok"})
 
 
-@app.route("/task")
+@app.route("/task", methods=["GET", "POST"])
 def send_task():
-    task = {"task": "process", "data": "sample"}
-    r.rpush("tasks", json.dumps(task))
-    return jsonify({"status": "task queued via redis"})
+    resp = requests.post(WORKER_URL)
+    return jsonify({"status": "task sent", "worker_response": resp.json()})
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "5000"))
+    print("Application started", flush=True)
+    app.run(host=host, port=port)
